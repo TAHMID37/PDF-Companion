@@ -1,6 +1,6 @@
 # PDF-Companion
 
-Welcome to the PDF Companion! This project aims to provide a powerful and intuitive PDF reader application with the unique ability to answer questions based on the content of the PDF documents.
+PDF Companion" the ultimate PDF reader app that not only brings your documents to life but also provides insightful answers to your queries, revolutionizing the way you interact with your PDF files.
 
 
 ![Alt Text](https://github.com/TAHMID37/PDF-Companion/blob/main/app.PNG)
