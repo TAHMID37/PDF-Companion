@@ -9,10 +9,12 @@ Welcome to the PDF Companion! This project aims to provide a powerful and intuit
 
 1.To run the PDF Question Answer App locally, please follow these steps:
 
-```git clone https://github.com/username/repository.git ```
+```https://github.com/TAHMID37/PDF-Companion.git```
 
 2.Install the required dependencies using pip or conda:
+
 ```pip install -r requirements.txt```
 
-3.Then run the app
+3.Then run the app:
+
  ``` streamlit run app.py ```
