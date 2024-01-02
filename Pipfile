@@ -11,6 +11,9 @@ streamlit = "*"
 openai = "*"
 faiss-cpu = "*"
 streamlit-extras = "*"
+tiktoken = "*"
+chromadb = "*"
+pypdf = "*"
 
 [dev-packages]
 

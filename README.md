@@ -13,8 +13,14 @@ PDF Companion" the ultimate PDF reader app that not only brings your documents t
 
 2.Install the required dependencies using pip or conda:
 
-```pip install -r requirements.txt```
+```pipenv install```
 
-3.Then run the app:
+3. Then start the shell
+
+```pipenv shell```
+
+
+
+4.Then run the app:
 
  ``` streamlit run app.py ```
