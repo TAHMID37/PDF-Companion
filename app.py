@@ -13,6 +13,7 @@ from streamlit_extras.add_vertical_space import add_vertical_space
 from langchain.vectorstores import Chroma
 from langchain.document_loaders import PyPDFLoader
 # Set the page configuration
+from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
 st.set_page_config(page_title="PDF Companion", page_icon=":robot:")
 
 # Sidebar contents
@@ -101,7 +102,7 @@ def main():
                 #chunks = get_text_chunks(pages)
                 #st.write(pages)
 
-            embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+            embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
             VectorStore = FAISS.from_documents(pages, embedding=embeddings)
             
             # Accept user questions/query
