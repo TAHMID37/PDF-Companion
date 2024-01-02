@@ -61,8 +61,11 @@ def main():
  
  # upload a PDF file
       pdf = st.file_uploader("Upload your PDF", type='pdf')
+      
+      if pdf is None:
+            ""
   
-      if pdf is not None:
+      else  :
              text=get_pdf_text(pdf)
              chunks=get_text_chunks(text)
              
@@ -83,6 +86,7 @@ def main():
         # st.write(query)
  
       if query:
+          
             docs = VectorStore.similarity_search(query=query, k=3)
  
             llm = OpenAI(openai_api_key=openai_api_key)
