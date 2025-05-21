@@ -113,7 +113,7 @@ def transcribe_audio_deepgram(audio_file_buffer, api_key):
         return None
 
 # Function to generate audio using ElevenLabs
-def generate_audio_elevenlabs(text_to_speak, api_key, voice_id="Rachel"):
+def generate_audio_elevenlabs(text_to_speak, api_key, voice_id="JBFqnCBsd6RMkjVDRZzb"):
     if not api_key:
         st.error("ElevenLabs API Key is not provided.")
         return None
@@ -237,13 +237,7 @@ def main():
             recorded_audio = audio_recorder("Click to record", "Click to stop recording")
             add_vertical_space(1) # Added space
             
-            # Option 2: Upload Audio File
-            st.markdown("#### Or Upload Audio File:")
-            uploaded_audio_file = st.file_uploader(
-                "Upload an audio file (e.g., WAV, MP3, M4A):",
-                type=['wav', 'mp3', 'm4a'],
-                label_visibility="collapsed" 
-            )
+            # Option 2: Upload Audio File # Removed
 
             if recorded_audio is not None and len(recorded_audio) > 0:
                 st.audio(recorded_audio, format="audio/wav")
@@ -253,21 +247,9 @@ def main():
                     st.info(f"Transcribed Query (from recording): {transcribed_query}")
                     query = transcribed_query
                     query_text = "" # Clear text input
-                    uploaded_audio_file = None # Clear file uploader
                 else:
                     st.error("Could not transcribe recorded audio. Please try again or use another input method.")
                     query = "" 
-            elif uploaded_audio_file is not None:
-                st.audio(uploaded_audio_file, format=uploaded_audio_file.type)
-                audio_buffer = uploaded_audio_file.getbuffer()
-                transcribed_query = transcribe_audio_deepgram(audio_buffer, deepgram_api_key)
-                if transcribed_query:
-                    st.info(f"{transcribed_query}")
-                    query = transcribed_query
-                    query_text = "" # Clear text input
-                else:
-                    st.error("Could not transcribe uploaded audio. Please use text input or try another audio file.")
-                    query = ""
             # If both are provided, recorded_audio takes precedence due to order of checks
             
         if query_text and not query: # Only use text input if no voice query was processed
