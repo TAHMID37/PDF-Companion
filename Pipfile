@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 langchain = "*"
+langchain-community = "*" # Added for components like FAISS
+langchain-google-genai = "*" # Added for Google GenAI integrations
 pypdf2 = "*"
 python-dotenv = "*"
 streamlit = "*"
@@ -14,9 +16,14 @@ streamlit-extras = "*"
 tiktoken = "*"
 chromadb = "*"
 pypdf = "*"
-sentence-transformers = "*"
+# sentence-transformers = "*" # Replaced by google-generativeai for embeddings
+google-generativeai = "*"
+deepgram-sdk = "*"
+elevenlabs = "*"
 
 [dev-packages]
+pytest = "*"
+pytest-mock = "*"
 
 [requires]
-python_version = "3.11"
+python_version = "3.11" # Or your project's Python version
