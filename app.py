@@ -358,7 +358,7 @@ def main():
                 st.session_state.show_response = False  # Hide the response area
                 st.session_state.query_text_input = ""  # Clear the text input field
                 # Note: query_text_input_widget will be updated by Streamlit due to binding with query_text_input
-                st.experimental_rerun() 
+                st.rerun() 
 
 if __name__ == '__main__':
     main()
