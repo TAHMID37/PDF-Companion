@@ -16,9 +16,18 @@ from langchain_community.document_loaders import PyPDFLoader # Updated import
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from deepgram import DeepgramClient, PrerecordedOptions, FileSource
+import elevenlabs # Modified import
 from elevenlabs.client import ElevenLabs
+from audio_recorder_streamlit import audio_recorder
 
 load_dotenv() # Load .env file if present
+
+# Print ElevenLabs version for debugging
+try:
+    print(f"DEBUG: elevenlabs.__version__: {elevenlabs.__version__}")
+except AttributeError:
+    print("DEBUG: elevenlabs.__version__ could not be accessed. The 'elevenlabs' import might not be the package itself.")
+
 
 # Set the page configuration
 st.set_page_config(page_title="PDF Companion", page_icon=":robot:")
@@ -45,7 +54,7 @@ def get_google_api_key():
     if env_key:
         return env_key
     else:
-        st.sidebar.markdown("### API Keys") # This will be the first, so no conditional check needed now
+        # Removed conditional markdown for API Keys header
         input_text = st.sidebar.text_input(
             label="Google API Key (Required for Core QA)",
             placeholder="Enter your Google API Key",
@@ -59,9 +68,7 @@ def get_deepgram_api_key():
     if env_key:
         return env_key
     else:
-        # Ensure "API Keys" heading is only added once by checking if google key input was rendered
-        if "google_api_key_input" not in st.session_state:
-            st.sidebar.markdown("### API Keys")
+        # Removed conditional markdown for API Keys header
         input_text = st.sidebar.text_input(
             label="Deepgram API Key (for Voice Queries)",
             placeholder="Enter your Deepgram API Key",
@@ -75,9 +82,7 @@ def get_elevenlabs_api_key():
     if env_key:
         return env_key
     else:
-        # Ensure "API Keys" heading is only added once
-        if "google_api_key_input" not in st.session_state and "deepgram_api_key_input" not in st.session_state:
-            st.sidebar.markdown("### API Keys")
+        # Removed conditional markdown for API Keys header
         input_text = st.sidebar.text_input(
             label="ElevenLabs API Key (for Spoken Responses)",
             placeholder="Enter your ElevenLabs API Key",
@@ -114,14 +119,30 @@ def generate_audio_elevenlabs(text_to_speak, api_key, voice_id="Rachel"):
         return None
     try:
         client = ElevenLabs(api_key=api_key)
-        audio_bytes = client.generate(
+        audio_bytes_iter = client.text_to_speech.convert(
+            voice_id=voice_id, # Changed from voice to voice_id
             text=text_to_speak,
-            voice=voice_id,
-            model="eleven_multilingual_v2" # Or your preferred model
+            model_id="eleven_multilingual_v2" # Changed from model to model_id
         )
+        # The convert method returns an iterator of audio chunks.
+        # We need to concatenate them to get the full audio data.
+        audio_bytes_list = []
+        for chunk in audio_bytes_iter:
+            if chunk:
+                audio_bytes_list.append(chunk)
+        
+        if not audio_bytes_list:
+            st.error("ElevenLabs TTS error: No audio data returned.")
+            return None
+            
+        audio_bytes = b"".join(audio_bytes_list)
         return audio_bytes
+    except AttributeError as ae:
+        st.error(f"ElevenLabs TTS AttributeError: {ae}")
+        # Removed detailed debug prints, but keeping the error message.
+        return None
     except Exception as e:
-        st.error(f"ElevenLabs TTS error: {e}")
+        st.error(f"ElevenLabs TTS error (non-AttributeError): {e}")
         return None
 
 # Function to save uploaded PDF and get its path
@@ -174,6 +195,9 @@ def get_text_chunks(text):
 def main():
     st.header("Chat with PDF 💬")
 
+    # API Keys Section in Sidebar
+    st.sidebar.markdown("### API Keys") # Added once before all key inputs
+
     # Get API Keys
     # openai_api_key = get_openai_api_key() # Removed
     google_api_key = get_google_api_key()
@@ -195,6 +219,7 @@ def main():
     else:
         # upload a PDF file
         uploaded_pdf = st.file_uploader("Upload your PDF", type='pdf')
+        st.divider() # Added divider after PDF uploader
 
         # Initialize query variable
         query = ""
@@ -202,32 +227,56 @@ def main():
         # Text input for query
         query_text = st.text_input("Ask questions about your PDF file (text):")
 
-        # Audio input for query
-        uploaded_audio_file = None
+        # Voice Query Section
         if deepgram_api_key:
+            st.subheader("Voice Query")
+            add_vertical_space(1) # Added space
+            
+            # Option 1: Record Audio
+            st.markdown("#### Record Audio:")
+            recorded_audio = audio_recorder("Click to record", "Click to stop recording")
+            add_vertical_space(1) # Added space
+            
+            # Option 2: Upload Audio File
+            st.markdown("#### Or Upload Audio File:")
             uploaded_audio_file = st.file_uploader(
-                "Or ask by uploading an audio file (e.g., WAV, MP3, M4A):",
-                type=['wav', 'mp3', 'm4a']
+                "Upload an audio file (e.g., WAV, MP3, M4A):",
+                type=['wav', 'mp3', 'm4a'],
+                label_visibility="collapsed" 
             )
-        # No "else st.info" here, as the sidebar warning for Deepgram key is sufficient.
-        # The uploader simply won't appear if key is missing.
 
-        if uploaded_audio_file and deepgram_api_key: # Process if audio uploaded and key exists
-            st.audio(uploaded_audio_file, format=uploaded_audio_file.type)
-            audio_buffer = uploaded_audio_file.getbuffer()
-            transcribed_query = transcribe_audio_deepgram(audio_buffer, deepgram_api_key)
-            if transcribed_query:
-                st.info(f"Transcribed Query: {transcribed_query}")
-                query = transcribed_query  # Use transcribed query
-            else:
-                st.error("Could not transcribe audio. Please use text input or try another audio file.")
-                query = "" # Clear query if transcription failed
-        elif query_text:
-            query = query_text # Use text query if audio not used or failed
+            if recorded_audio is not None and len(recorded_audio) > 0:
+                st.audio(recorded_audio, format="audio/wav")
+                audio_buffer = recorded_audio # audiorecorder returns bytes
+                transcribed_query = transcribe_audio_deepgram(audio_buffer, deepgram_api_key)
+                if transcribed_query:
+                    st.info(f"Transcribed Query (from recording): {transcribed_query}")
+                    query = transcribed_query
+                    query_text = "" # Clear text input
+                    uploaded_audio_file = None # Clear file uploader
+                else:
+                    st.error("Could not transcribe recorded audio. Please try again or use another input method.")
+                    query = "" 
+            elif uploaded_audio_file is not None:
+                st.audio(uploaded_audio_file, format=uploaded_audio_file.type)
+                audio_buffer = uploaded_audio_file.getbuffer()
+                transcribed_query = transcribe_audio_deepgram(audio_buffer, deepgram_api_key)
+                if transcribed_query:
+                    st.info(f"{transcribed_query}")
+                    query = transcribed_query
+                    query_text = "" # Clear text input
+                else:
+                    st.error("Could not transcribe uploaded audio. Please use text input or try another audio file.")
+                    query = ""
+            # If both are provided, recorded_audio takes precedence due to order of checks
+            
+        if query_text and not query: # Only use text input if no voice query was processed
+            query = query_text
 
         if uploaded_pdf is None:
             st.info("Please upload a PDF file to begin.")
         elif query: # Only proceed if PDF is uploaded AND a query exists
+            st.divider() # Added divider before displaying response
             file_path = save_uploaded_pdf(uploaded_pdf)
             if file_path: # Ensure PDF was saved correctly
                 try:
@@ -244,16 +293,12 @@ def main():
                     st.write(response)
 
                     # ElevenLabs TTS Integration
-                    if elevenlabs_api_key:
-                        if st.button("🔊 Play Response Audio"):
-                            if response: # Ensure there is a response to play
-                                audio_data = generate_audio_elevenlabs(response, elevenlabs_api_key)
-                                if audio_data:
-                                    st.audio(audio_data, format="audio/mpeg")
-                                else:
-                                    st.error("Could not generate audio for the response.")
-                            else:
-                                st.info("No response text to play.")
+                    if elevenlabs_api_key and response: # Check for API key and response
+                        audio_data = generate_audio_elevenlabs(response, elevenlabs_api_key)
+                        if audio_data:
+                            st.audio(audio_data, format="audio/mpeg")
+                        else:
+                            st.error("Could not generate audio for the response.")
                     # Removed the 'else' that showed "Provide an ElevenLabs API Key..." here, 
                     # as it's already handled by the general API key check section.
                 
