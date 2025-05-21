@@ -260,3 +260,298 @@ def test_core_qa_components_initialized_and_called(
 # 1. Ensure Pipfile has pytest and pytest-mock in [dev-packages]
 # 2. Run `pipenv install --dev`
 # 3. Run `pipenv run pytest tests/` (or `pipenv run python -m pytest tests/`)
+
+# --- Tests for main() application logic ---
+
+# Fixture to mock streamlit and its components for main() tests
+@pytest.fixture
+def mock_st_main(mocker):
+    mock_st = MagicMock()
+    mocker.patch('app.st', mock_st)
+    
+    # Mock session_state as a dictionary attached to the mock_st object
+    # This allows tests to manipulate it directly.
+    mock_st.session_state = {} 
+    
+    # Mock other commonly used Streamlit functions to prevent them from actually running
+    mock_st.sidebar = MagicMock()
+    mock_st.header = MagicMock()
+    mock_st.title = MagicMock()
+    mock_st.markdown = MagicMock()
+    mock_st.divider = MagicMock()
+    mock_st.file_uploader = MagicMock()
+    mock_st.text_input = MagicMock()
+    mock_st.button = MagicMock()
+    mock_st.checkbox = MagicMock()
+    mock_st.audio = MagicMock()
+    mock_st.write = MagicMock()
+    mock_st.error = MagicMock()
+    mock_st.warning = MagicMock()
+    mock_st.info = MagicMock()
+    mock_st.experimental_rerun = MagicMock()
+    
+    # Mock external libraries/functions called by main that are not core to the UI logic being tested
+    mocker.patch('app.get_google_api_key', return_value="fake_google_key")
+    mocker.patch('app.get_deepgram_api_key', return_value="fake_deepgram_key")
+    mocker.patch('app.get_elevenlabs_api_key', return_value="fake_elevenlabs_key")
+    mocker.patch('app.audio_recorder', return_value=None) # Default to no audio recorded
+    mocker.patch('app.save_uploaded_pdf')
+    mocker.patch('app.get_pdf_text')
+    m_google_embeddings = mocker.patch('app.GoogleGenerativeAIEmbeddings')
+    m_faiss = mocker.patch('app.FAISS')
+    m_chat_google = mocker.patch('app.ChatGoogleGenerativeAI')
+    m_load_qa_chain = mocker.patch('app.load_qa_chain')
+
+    # Mock the chain and its run method
+    mock_chain_instance = MagicMock()
+    mock_chain_instance.run.return_value = "Mocked QA response"
+    m_load_qa_chain.return_value = mock_chain_instance
+    
+    # Mock FAISS methods
+    mock_vector_store_instance = MagicMock()
+    mock_vector_store_instance.similarity_search.return_value = [MagicMock()] # dummy docs
+    m_faiss.from_documents.return_value = mock_vector_store_instance
+
+    return mock_st
+
+def test_session_state_initialization(mock_st_main, mocker):
+    """
+    Tests if session state variables are initialized correctly when main() is first run.
+    """
+    # Import main here to ensure it uses the mocked 'app.st'
+    from app import main
+
+    # Call main to trigger session state initialization
+    main()
+
+    # Assertions for session state variables
+    assert 'query' in mock_st_main.session_state, "session_state missing 'query'"
+    assert mock_st_main.session_state.query == "", "query not initialized to empty string"
+
+    assert 'response' in mock_st_main.session_state, "session_state missing 'response'"
+    assert mock_st_main.session_state.response == "", "response not initialized to empty string"
+
+    assert 'audio_response' in mock_st_main.session_state, "session_state missing 'audio_response'"
+    assert mock_st_main.session_state.audio_response is None, "audio_response not initialized to None"
+
+    assert 'show_response' in mock_st_main.session_state, "session_state missing 'show_response'"
+    assert mock_st_main.session_state.show_response is False, "show_response not initialized to False"
+
+    assert 'text_output_enabled' in mock_st_main.session_state, "session_state missing 'text_output_enabled'"
+    assert mock_st_main.session_state.text_output_enabled is True, "text_output_enabled not initialized to True"
+
+    assert 'voice_output_enabled' in mock_st_main.session_state, "session_state missing 'voice_output_enabled'"
+    assert mock_st_main.session_state.voice_output_enabled is True, "voice_output_enabled not initialized to True"
+    
+    assert 'query_text_input' in mock_st_main.session_state, "session_state missing 'query_text_input'"
+    assert mock_st_main.session_state.query_text_input == "", "query_text_input not initialized to empty string"
+
+def test_text_output_toggle_enabled(mock_st_main, mocker):
+    """Tests text response display when text output is enabled."""
+    from app import main
+    mock_st_main.session_state.show_response = True
+    mock_st_main.session_state.response = "Test text response"
+    mock_st_main.session_state.text_output_enabled = True # Simulate checkbox checked
+
+    main()
+
+    # Check that st.write was called for the response
+    # We need to check the call list as st.write might be called for other things too.
+    # A more robust way would be to check specific calls if there are many st.write calls.
+    # For now, we assume these are the primary st.write calls for the response.
+    calls = [mocker.call("### Response"), mocker.call("Test text response")]
+    mock_st_main.write.assert_has_calls(calls, any_order=False)
+
+def test_text_output_toggle_disabled(mock_st_main, mocker):
+    """Tests text response display is suppressed when text output is disabled."""
+    from app import main
+    mock_st_main.session_state.show_response = True
+    mock_st_main.session_state.response = "Test text response"
+    mock_st_main.session_state.text_output_enabled = False # Simulate checkbox unchecked
+
+    # Reset mock_st_main.write before calling main to isolate calls within this test
+    mock_st_main.write.reset_mock()
+    
+    main()
+
+    # Assert that st.write was NOT called with the response content
+    for call_args in mock_st_main.write.call_args_list:
+        assert call_args[0][0] != "### Response"
+        assert call_args[0][0] != "Test text response"
+
+def test_voice_output_toggle_enabled_with_audio(mock_st_main, mocker):
+    """Tests audio response display when voice output is enabled and audio is available."""
+    from app import main
+    mock_st_main.session_state.show_response = True
+    mock_st_main.session_state.response = "Response text" # Needed for context
+    mock_st_main.session_state.audio_response = b"fake_audio_bytes"
+    mock_st_main.session_state.voice_output_enabled = True # Simulate checkbox checked
+
+    main()
+    mock_st_main.audio.assert_called_once_with(b"fake_audio_bytes", format="audio/mpeg")
+
+def test_voice_output_toggle_disabled(mock_st_main, mocker):
+    """Tests audio response display is suppressed when voice output is disabled."""
+    from app import main
+    mock_st_main.session_state.show_response = True
+    mock_st_main.session_state.response = "Response text"
+    mock_st_main.session_state.audio_response = b"fake_audio_bytes"
+    mock_st_main.session_state.voice_output_enabled = False # Simulate checkbox unchecked
+    
+    main()
+    mock_st_main.audio.assert_not_called()
+
+def test_voice_output_enabled_no_audio_data_shows_warning(mock_st_main, mocker):
+    """Tests that a warning is shown if voice output is enabled but no audio data is present (and not an error response)."""
+    from app import main
+    mock_st_main.session_state.show_response = True
+    mock_st_main.session_state.response = "Valid text, but no audio." # Not an error response
+    mock_st_main.session_state.audio_response = None
+    mock_st_main.session_state.voice_output_enabled = True
+
+    main()
+    mock_st_main.warning.assert_called_once_with("Voice output is enabled, but could not generate audio. Check ElevenLabs API key and status.")
+    mock_st_main.audio.assert_not_called()
+
+def test_voice_output_enabled_no_audio_data_on_error_response(mock_st_main, mocker):
+    """Tests that no warning for missing audio is shown if the response itself is an error message."""
+    from app import main
+    mock_st_main.session_state.show_response = True
+    mock_st_main.session_state.response = "Error: Something went wrong." # Error response
+    mock_st_main.session_state.audio_response = None
+    mock_st_main.session_state.voice_output_enabled = True
+
+    main()
+    mock_st_main.warning.assert_not_called() # Warning should not be called for error responses
+    mock_st_main.audio.assert_not_called()
+
+
+# Placeholder for more tests for main()
+def test_clear_last_response_button(mock_st_main, mocker):
+    """Tests the 'Clear Last Response' button functionality."""
+    from app import main
+
+    # Setup initial state as if a response is being shown
+    mock_st_main.session_state.show_response = True
+    mock_st_main.session_state.response = "A previous text response."
+    mock_st_main.session_state.audio_response = b"previous_audio_bytes"
+    mock_st_main.session_state.query = "A previous query" # Should be cleared
+    mock_st_main.session_state.query_text_input = "Previous text in input" # Should be cleared
+
+    # Simulate the 'Clear Last Response' button being clicked
+    # The button is conditional on st.session_state.show_response, which is True here.
+    # We need to make the mock_st_main.button function return True when called with the specific key.
+    def button_side_effect(label, key=None):
+        if key == "clear_response_button":
+            return True
+        return False
+    mock_st_main.button.side_effect = button_side_effect
+    
+    main()
+
+    # Assertions
+    assert mock_st_main.session_state.show_response is False, "show_response should be False"
+    assert mock_st_main.session_state.response == "", "response should be cleared"
+    assert mock_st_main.session_state.audio_response is None, "audio_response should be cleared"
+    assert mock_st_main.session_state.query == "", "query should be cleared"
+    assert mock_st_main.session_state.query_text_input == "", "query_text_input should be cleared"
+    
+    mock_st_main.experimental_rerun.assert_called_once()
+
+def test_query_handling_text_input_with_pdf(mock_st_main, mocker):
+    """Tests query submission via text input when a PDF is uploaded."""
+    from app import main
+
+    # Simulate PDF uploaded
+    mock_st_main.file_uploader.return_value = MagicMock(name="UploadedPDF") 
+    
+    # Simulate text entered into the input field
+    mock_st_main.session_state.query_text_input = "This is a text query"
+
+    # Simulate the 'Submit Text Query' button being clicked
+    def button_side_effect(label, key=None):
+        if key == "submit_text_query_button":
+            # This simulates the action within app.main() that sets st.session_state.query
+            # based on st.session_state.query_text_input
+            mock_st_main.session_state.query = mock_st_main.session_state.query_text_input 
+            return True
+        return False
+    mock_st_main.button.side_effect = button_side_effect
+    
+    # Mock the QA chain execution (already done by fixture, but good to be aware)
+    mock_chain_run = mock_st_main.load_qa_chain.return_value.run 
+
+    main()
+
+    # Assert that the QA chain was called with the text query
+    mock_chain_run.assert_called_with(input_documents=mocker.ANY, question="This is a text query")
+    
+    # Assert that query and query_text_input in session_state are cleared after processing
+    assert mock_st_main.session_state.query == "", "session_state.query should be cleared after processing"
+    assert mock_st_main.session_state.query_text_input == "", "session_state.query_text_input should be cleared"
+
+def test_query_handling_voice_input_with_pdf(mock_st_main, mocker):
+    """Tests query submission via voice input when a PDF is uploaded."""
+    from app import main
+
+    # Simulate PDF uploaded
+    mock_st_main.file_uploader.return_value = MagicMock(name="UploadedPDF")
+    
+    # Simulate audio_recorder returning audio bytes
+    mock_st_main.audio_recorder.return_value = b"fake_audio_bytes_for_voice_query"
+    
+    # Mock transcribe_audio_deepgram to return a specific transcript
+    mock_transcribe = mocker.patch('app.transcribe_audio_deepgram', return_value="This is a voice query")
+
+    # Mock the QA chain execution
+    mock_chain_run = mock_st_main.load_qa_chain.return_value.run
+
+    main()
+
+    # Assert transcribe_audio_deepgram was called
+    mock_transcribe.assert_called_once_with(b"fake_audio_bytes_for_voice_query", "fake_deepgram_key")
+    
+    # Assert that st.info was called with the transcribed query (visual feedback for user)
+    # This requires checking the call_args_list of mock_st_main.info
+    transcribed_info_call_found = False
+    for call in mock_st_main.info.call_args_list:
+        if call[0][0] == "Transcribed Query (from recording): This is a voice query":
+            transcribed_info_call_found = True
+            break
+    assert transcribed_info_call_found, "st.info with transcribed query not found"
+
+    # Assert that the QA chain was called with the voice query
+    mock_chain_run.assert_called_with(input_documents=mocker.ANY, question="This is a voice query")
+
+    # Assert that query and query_text_input in session_state are cleared
+    assert mock_st_main.session_state.query == "", "session_state.query should be cleared after processing"
+    assert mock_st_main.session_state.query_text_input == "", "session_state.query_text_input should be cleared by voice input"
+
+def test_query_processing_requires_pdf(mock_st_main, mocker):
+    """Tests that query processing is skipped and a warning is shown if PDF is not uploaded."""
+    from app import main
+
+    mock_st_main.file_uploader.return_value = None # No PDF
+    mock_st_main.session_state.query_text_input = "Query without PDF"
+    
+    # Simulate submit button click
+    def button_side_effect(label, key=None):
+        if key == "submit_text_query_button":
+            mock_st_main.session_state.query = mock_st_main.session_state.query_text_input
+            return True
+        return False
+    mock_st_main.button.side_effect = button_side_effect
+
+    mock_chain_run = mock_st_main.load_qa_chain.return_value.run
+
+    main()
+
+    mock_st_main.warning.assert_any_call("Please upload a PDF file to ask questions about it.")
+    mock_chain_run.assert_not_called() # QA chain should not run
+    
+    # Query should be cleared because it cannot be processed
+    assert mock_st_main.session_state.query == "", "session_state.query should be cleared if no PDF"
+    # query_text_input is also cleared when query cannot be processed without PDF
+    assert mock_st_main.session_state.query_text_input == "", "session_state.query_text_input should be cleared if no PDF"
+
+# def test_query_handling_voice_input(mock_st_main, mocker): ...
