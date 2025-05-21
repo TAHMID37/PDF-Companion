@@ -351,12 +351,13 @@ def main():
                  # This warning logic also belongs to response handling
                 st.warning("Voice output is enabled, but could not generate audio. Check ElevenLabs API key and status.")
 
-            if st.button("Clear Last Response", key="clear_response_button"): # This button belongs to response handling
+            if st.button("Clear Chat", key="clear_response_button"): # This button belongs to response handling
                 st.session_state.query = ""  # Clear any active query
                 st.session_state.response = ""  # Clear previous text response
                 st.session_state.audio_response = None  # Clear previous audio response
                 st.session_state.show_response = False  # Hide the response area
                 st.session_state.query_text_input = ""  # Clear the text input field
+                st.session_state.audio_recorder_widget = None # Clear audio recorder state
                 # Note: query_text_input_widget will be updated by Streamlit due to binding with query_text_input
                 st.rerun() 
 
