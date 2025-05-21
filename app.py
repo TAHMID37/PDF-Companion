@@ -193,6 +193,20 @@ def get_text_chunks(text):
 
 
 def main():
+    # Initialize session state variables
+    if 'query' not in st.session_state:
+        st.session_state.query = ""
+    if 'response' not in st.session_state:
+        st.session_state.response = ""
+    if 'audio_response' not in st.session_state:
+        st.session_state.audio_response = None
+    if 'show_response' not in st.session_state:
+        st.session_state.show_response = False
+    if 'text_output_enabled' not in st.session_state:
+        st.session_state.text_output_enabled = True
+    if 'voice_output_enabled' not in st.session_state:
+        st.session_state.voice_output_enabled = True
+
     st.header("Chat with PDF 💬")
 
     # API Keys Section in Sidebar
@@ -210,6 +224,22 @@ def main():
     if not elevenlabs_api_key:
         st.sidebar.warning("ElevenLabs API Key not provided. Spoken response feature will be disabled.", icon="⚠️")
 
+    # Output Options Section in Sidebar
+    st.sidebar.markdown("### Output Options")
+    st.session_state.text_output_enabled = st.sidebar.checkbox(
+        "Enable Text Output", 
+        value=st.session_state.text_output_enabled
+    )
+    
+    voice_output_disabled = not bool(elevenlabs_api_key)
+    tooltip_message = "ElevenLabs API Key is required to enable voice output." if voice_output_disabled else ""
+    st.session_state.voice_output_enabled = st.sidebar.checkbox(
+        "Enable Voice Output", 
+        value=st.session_state.voice_output_enabled, 
+        disabled=voice_output_disabled,
+        help=tooltip_message
+    )
+
     # Core application logic - gated by Google API Key
     if not google_api_key:
         st.error("Google API Key is required for the core PDF Question Answering functionality. Please provide it in the sidebar under 'API Keys'.")
@@ -221,75 +251,114 @@ def main():
         uploaded_pdf = st.file_uploader("Upload your PDF", type='pdf')
         st.divider() # Added divider after PDF uploader
 
-        # Initialize query variable
-        query = ""
+        # Ensure query_text_input is initialized in session state
+        if 'query_text_input' not in st.session_state:
+            st.session_state.query_text_input = ""
 
         # Text input for query
-        query_text = st.text_input("Ask questions about your PDF file (text):")
+        st.text_input(
+            "Ask questions about your PDF file (text):",
+            key="query_text_input_widget",  # Widget's own key
+            value=st.session_state.query_text_input, # Controlled by this session state variable
+            on_change=lambda: setattr(st.session_state, 'query_text_input', st.session_state.query_text_input_widget)
+        )
+
+        # Button to submit text query
+        if st.button("Submit Text Query", key="submit_text_query_button"):
+            if st.session_state.query_text_input.strip():
+                st.session_state.query = st.session_state.query_text_input.strip()
+                # query_text_input will be cleared after query processing
+            else:
+                st.warning("Please enter a question in the text box.")
 
         # Voice Query Section
         if deepgram_api_key:
             st.subheader("Voice Query")
-            add_vertical_space(1) # Added space
-            
-            # Option 1: Record Audio
-            st.markdown("#### Record Audio:")
-            recorded_audio = audio_recorder("Click to record", "Click to stop recording")
-            add_vertical_space(1) # Added space
-            
-            # Option 2: Upload Audio File # Removed
+            add_vertical_space(1)
+            recorded_audio = audio_recorder("Click to record", "Click to stop recording", key="audio_recorder_widget")
+            add_vertical_space(1)
 
             if recorded_audio is not None and len(recorded_audio) > 0:
                 st.audio(recorded_audio, format="audio/wav")
-                audio_buffer = recorded_audio # audiorecorder returns bytes
+                audio_buffer = recorded_audio
                 transcribed_query = transcribe_audio_deepgram(audio_buffer, deepgram_api_key)
                 if transcribed_query:
                     st.info(f"Transcribed Query (from recording): {transcribed_query}")
-                    query = transcribed_query
-                    query_text = "" # Clear text input
+                    st.session_state.query = transcribed_query
+                    st.session_state.query_text_input = ""  # Clear text input field as voice query takes precedence
                 else:
                     st.error("Could not transcribe recorded audio. Please try again or use another input method.")
-                    query = "" 
-            # If both are provided, recorded_audio takes precedence due to order of checks
-            
-        if query_text and not query: # Only use text input if no voice query was processed
-            query = query_text
-
-        if uploaded_pdf is None:
-            st.info("Please upload a PDF file to begin.")
-        elif query: # Only proceed if PDF is uploaded AND a query exists
-            st.divider() # Added divider before displaying response
-            file_path = save_uploaded_pdf(uploaded_pdf)
-            if file_path: # Ensure PDF was saved correctly
-                try:
-                    pages = get_pdf_text(file_path) # Attempt to get PDF text first
-                    
-                    # All subsequent processing should be within this try block
-                    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=google_api_key)
-                    VectorStore = FAISS.from_documents(pages, embedding=embeddings)
-                    
-                    docs = VectorStore.similarity_search(query=query, k=3)
-                    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", google_api_key=google_api_key, convert_system_message_to_human=True)
-                    chain = load_qa_chain(llm=llm, chain_type="stuff")
-                    response = chain.run(input_documents=docs, question=query)
-                    st.write(response)
-
-                    # ElevenLabs TTS Integration
-                    if elevenlabs_api_key and response: # Check for API key and response
-                        audio_data = generate_audio_elevenlabs(response, elevenlabs_api_key)
-                        if audio_data:
-                            st.audio(audio_data, format="audio/mpeg")
-                        else:
-                            st.error("Could not generate audio for the response.")
-                    # Removed the 'else' that showed "Provide an ElevenLabs API Key..." here, 
-                    # as it's already handled by the general API key check section.
+        
+        # Main query processing logic
+        if st.session_state.query:  # Proceed only if a query exists
+            if uploaded_pdf is None:
+                st.warning("Please upload a PDF file to ask questions about it.")
+                st.session_state.query = "" # Clear query as it cannot be processed
+                st.session_state.query_text_input = "" # Clear input field too
+            else:
+                st.divider()
+                current_query_to_process = st.session_state.query # Use the active query
                 
-                except Exception as e:
-                    st.error(f"An error occurred during PDF processing or QA: {e}")
-                    if "Google" in str(e) or "gemini" in str(e).lower(): # More specific error for Google
-                        st.error("Please ensure your Google API key is correct, has the 'Generative Language API' enabled in your Google Cloud console, and that your account has billing enabled.")
-                    st.info("For more information on setting up your Google API key, visit: https://ai.google.dev/documentation/text_setup")
-                # No specific error message for ElevenLabs here as generate_audio_elevenlabs handles its own errors.
+                # Initialize response states for the current query
+                st.session_state.response = ""
+                st.session_state.audio_response = None
+                st.session_state.show_response = True # Assume we will show something (response or error)
+                
+                file_path = save_uploaded_pdf(uploaded_pdf)
+                if file_path:
+                    try:
+                        pages = get_pdf_text(file_path)
+                        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=google_api_key)
+                        VectorStore = FAISS.from_documents(pages, embedding=embeddings)
+                        docs = VectorStore.similarity_search(query=current_query_to_process, k=3)
+                        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", google_api_key=google_api_key, convert_system_message_to_human=True)
+                        chain = load_qa_chain(llm=llm, chain_type="stuff")
+                        
+                        # Actual QA execution
+                        response_text = chain.run(input_documents=docs, question=current_query_to_process)
+                        st.session_state.response = response_text # Store text response
+                        
+                        # Generate audio response if enabled and API key exists and there's a response
+                        if st.session_state.voice_output_enabled and elevenlabs_api_key and st.session_state.response:
+                            st.session_state.audio_response = generate_audio_elevenlabs(st.session_state.response, elevenlabs_api_key)
+                        # generate_audio_elevenlabs handles its own errors by returning None and displaying st.error
+
+                    except Exception as e:
+                        st.error(f"An error occurred during PDF processing or QA: {e}")
+                        st.session_state.response = f"Error: An error occurred during PDF processing or QA. Details: {e}" # Store error message
+                        st.session_state.audio_response = None # Ensure no audio response on error
+                        if "Google" in str(e) or "gemini" in str(e).lower():
+                             st.error("Please ensure your Google API key is correct, has the 'Generative Language API' enabled in your Google Cloud console, and that your account has billing enabled.")
+                
+                # Clear the active query and the text input field *after* processing is complete
+                st.session_state.query = ""
+                st.session_state.query_text_input = "" 
+        
+        # Conditional display of "Please upload a PDF file to begin."
+        # This should only show if no PDF is uploaded AND no response is currently being shown.
+        if uploaded_pdf is None and not st.session_state.show_response:
+             st.info("Please upload a PDF file to begin.")
+
+        # Response display logic (to be fully refactored in the next subtask)
+        if st.session_state.show_response:
+            if st.session_state.text_output_enabled and st.session_state.response:
+                st.write("### Response")
+                st.write(st.session_state.response)
+            
+            if st.session_state.voice_output_enabled and st.session_state.audio_response: # This variable would be set by response logic
+                st.audio(st.session_state.audio_response, format="audio/mpeg")
+            elif st.session_state.voice_output_enabled and not st.session_state.audio_response and st.session_state.response and not ("Error:" in st.session_state.response):
+                 # This warning logic also belongs to response handling
+                st.warning("Voice output is enabled, but could not generate audio. Check ElevenLabs API key and status.")
+
+            if st.button("Clear Last Response", key="clear_response_button"): # This button belongs to response handling
+                st.session_state.query = ""  # Clear any active query
+                st.session_state.response = ""  # Clear previous text response
+                st.session_state.audio_response = None  # Clear previous audio response
+                st.session_state.show_response = False  # Hide the response area
+                st.session_state.query_text_input = ""  # Clear the text input field
+                # Note: query_text_input_widget will be updated by Streamlit due to binding with query_text_input
+                st.experimental_rerun() 
 
 if __name__ == '__main__':
     main()
