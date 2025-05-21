@@ -238,7 +238,7 @@ def main():
                     VectorStore = FAISS.from_documents(pages, embedding=embeddings)
                     
                     docs = VectorStore.similarity_search(query=query, k=3)
-                    llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=google_api_key, convert_system_message_to_human=True)
+                    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", google_api_key=google_api_key, convert_system_message_to_human=True)
                     chain = load_qa_chain(llm=llm, chain_type="stuff")
                     response = chain.run(input_documents=docs, question=query)
                     st.write(response)
