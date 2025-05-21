@@ -45,7 +45,7 @@ def get_google_api_key():
     if env_key:
         return env_key
     else:
-        st.sidebar.markdown("### API Keys") # This will be the first, so no conditional check needed now
+        # Removed conditional markdown for API Keys header
         input_text = st.sidebar.text_input(
             label="Google API Key (Required for Core QA)",
             placeholder="Enter your Google API Key",
@@ -59,9 +59,7 @@ def get_deepgram_api_key():
     if env_key:
         return env_key
     else:
-        # Ensure "API Keys" heading is only added once by checking if google key input was rendered
-        if "google_api_key_input" not in st.session_state:
-            st.sidebar.markdown("### API Keys")
+        # Removed conditional markdown for API Keys header
         input_text = st.sidebar.text_input(
             label="Deepgram API Key (for Voice Queries)",
             placeholder="Enter your Deepgram API Key",
@@ -75,9 +73,7 @@ def get_elevenlabs_api_key():
     if env_key:
         return env_key
     else:
-        # Ensure "API Keys" heading is only added once
-        if "google_api_key_input" not in st.session_state and "deepgram_api_key_input" not in st.session_state:
-            st.sidebar.markdown("### API Keys")
+        # Removed conditional markdown for API Keys header
         input_text = st.sidebar.text_input(
             label="ElevenLabs API Key (for Spoken Responses)",
             placeholder="Enter your ElevenLabs API Key",
@@ -174,6 +170,9 @@ def get_text_chunks(text):
 def main():
     st.header("Chat with PDF 💬")
 
+    # API Keys Section in Sidebar
+    st.sidebar.markdown("### API Keys") # Added once before all key inputs
+
     # Get API Keys
     # openai_api_key = get_openai_api_key() # Removed
     google_api_key = get_google_api_key()
@@ -195,6 +194,7 @@ def main():
     else:
         # upload a PDF file
         uploaded_pdf = st.file_uploader("Upload your PDF", type='pdf')
+        st.divider() # Added divider after PDF uploader
 
         # Initialize query variable
         query = ""
@@ -205,9 +205,11 @@ def main():
         # Audio input for query
         uploaded_audio_file = None
         if deepgram_api_key:
+            st.subheader("Voice Query (Upload Audio File)") # Added subheader
             uploaded_audio_file = st.file_uploader(
                 "Or ask by uploading an audio file (e.g., WAV, MP3, M4A):",
-                type=['wav', 'mp3', 'm4a']
+                type=['wav', 'mp3', 'm4a'],
+                label_visibility="collapsed" # To avoid duplicate label
             )
         # No "else st.info" here, as the sidebar warning for Deepgram key is sufficient.
         # The uploader simply won't appear if key is missing.
@@ -228,6 +230,7 @@ def main():
         if uploaded_pdf is None:
             st.info("Please upload a PDF file to begin.")
         elif query: # Only proceed if PDF is uploaded AND a query exists
+            st.divider() # Added divider before displaying response
             file_path = save_uploaded_pdf(uploaded_pdf)
             if file_path: # Ensure PDF was saved correctly
                 try:
@@ -244,16 +247,12 @@ def main():
                     st.write(response)
 
                     # ElevenLabs TTS Integration
-                    if elevenlabs_api_key:
-                        if st.button("🔊 Play Response Audio"):
-                            if response: # Ensure there is a response to play
-                                audio_data = generate_audio_elevenlabs(response, elevenlabs_api_key)
-                                if audio_data:
-                                    st.audio(audio_data, format="audio/mpeg")
-                                else:
-                                    st.error("Could not generate audio for the response.")
-                            else:
-                                st.info("No response text to play.")
+                    if elevenlabs_api_key and response: # Check for API key and response
+                        audio_data = generate_audio_elevenlabs(response, elevenlabs_api_key)
+                        if audio_data:
+                            st.audio(audio_data, format="audio/mpeg")
+                        else:
+                            st.error("Could not generate audio for the response.")
                     # Removed the 'else' that showed "Provide an ElevenLabs API Key..." here, 
                     # as it's already handled by the general API key check section.
                 

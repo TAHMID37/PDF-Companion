@@ -16,7 +16,6 @@ streamlit-extras = "*"
 tiktoken = "*"
 chromadb = "*"
 pypdf = "*"
-# sentence-transformers = "*" # Replaced by google-generativeai for embeddings
 google-generativeai = "*"
 deepgram-sdk = "*"
 elevenlabs = "*"
