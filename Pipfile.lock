@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "88ec9c0895a1c12012fb575e84d21734fe995d610cb03a00c9b0886959186cc7"
+            "sha256": "26571dc2b3d6448c65010cffa9221503d4112f6a8d7f6bd5f758b8edac473592"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -2820,6 +2820,13 @@
             "markers": "python_version >= '3.8'",
             "version": "==0.9.1"
         },
+        "pydub": {
+            "hashes": [
+                "sha256:65617e33033874b59d87db603aa1ed450633288aefead953b30bded59cb599a6",
+                "sha256:980a33ce9949cab2a569606b65674d748ecbca4f0796887fd6f46173a7b0d30f"
+            ],
+            "version": "==0.25.1"
+        },
         "pygments": {
             "hashes": [
                 "sha256:61c16d2a8576dc0649d9f39e089b5f02bcd27fba10d8fb4dcc28173f7a45151f",
@@ -3446,6 +3453,15 @@
             "index": "pypi",
             "markers": "python_version >= '3.9' and python_full_version != '3.9.7'",
             "version": "==1.45.1"
+        },
+        "streamlit-audiorecorder": {
+            "hashes": [
+                "sha256:64b66c25b2b5e603cbea67b14074aaa7e93188913d7c83bbbc9f4d8ff237939d",
+                "sha256:a6f4fa16136d96ed8457768b9fe7e7745a3e1ba3fc50b85ad87b39f785e1a067"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.6'",
+            "version": "==0.0.6"
         },
         "streamlit-avatar": {
             "hashes": [

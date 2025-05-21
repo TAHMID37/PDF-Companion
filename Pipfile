@@ -19,6 +19,7 @@ pypdf = "*"
 google-generativeai = "*"
 deepgram-sdk = "*"
 elevenlabs = "*"
+streamlit-audiorecorder = "*"
 
 [dev-packages]
 pytest = "*"
