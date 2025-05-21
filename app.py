@@ -18,7 +18,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from deepgram import DeepgramClient, PrerecordedOptions, FileSource
 import elevenlabs # Modified import
 from elevenlabs.client import ElevenLabs
-from streamlit_audiorecorder import audiorecorder # Added import
+from audio_recorder_streamlit import audio_recorder
 
 load_dotenv() # Load .env file if present
 
@@ -234,7 +234,7 @@ def main():
             
             # Option 1: Record Audio
             st.markdown("#### Record Audio:")
-            recorded_audio = audiorecorder("Click to record", "Click to stop recording")
+            recorded_audio = audio_recorder("Click to record", "Click to stop recording")
             add_vertical_space(1) # Added space
             
             # Option 2: Upload Audio File
@@ -262,7 +262,7 @@ def main():
                 audio_buffer = uploaded_audio_file.getbuffer()
                 transcribed_query = transcribe_audio_deepgram(audio_buffer, deepgram_api_key)
                 if transcribed_query:
-                    st.info(f"Transcribed Query (from file): {transcribed_query}")
+                    st.info(f"{transcribed_query}")
                     query = transcribed_query
                     query_text = "" # Clear text input
                 else:
